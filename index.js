@@ -123,8 +123,7 @@ app.delete("/api/entries/:id", authMiddleware, async (req, res) => {
   res.json({ message: "Удалено" });
 });
 
-const PORT = process.env.PORT || 10000;
-app.get("/", (req, res) => {
-  res.send("Private Journal Backend is running.");
-});
+const PORT = process.env.PORT;
+app.listen(PORT, () => console.log(`🚀 Listening on port ${PORT}`));
+
 
