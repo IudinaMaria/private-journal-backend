@@ -9,11 +9,11 @@ const securityRoutes = require("./routes/security");
 
 const app = express();
 
-// ✅ Настройка CORS (разрешаем запросы с Vercel-фронта)
+// ✅ CORS — важен порядок! Ставим в начало
 app.use(cors({
   origin: "https://private-journal-frontend-98czwq4f3.vercel.app",
   methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
 app.use(bodyParser.json());
@@ -22,7 +22,9 @@ app.use("/api", securityRoutes);
 const JWT_SECRET = "super-secret-string";
 
 // ✅ Подключение к MongoDB Atlas
-mongoose.connect("mongodb+srv://gretarichterium:069649669w@gretarichter.ywr2un2.mongodb.net/private_journal?retryWrites=true&w=majority&appName=gretarichter");
+mongoose.connect("mongodb+srv://gretarichterium:069649669w@gretarichter.ywr2un2.mongodb.net/private_journal?retryWrites=true&w=majority&appName=gretarichter")
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB error:", err));
 
 // 📄 Схема записей
 const EntrySchema = new mongoose.Schema({
@@ -34,7 +36,7 @@ const EntrySchema = new mongoose.Schema({
 
 const Entry = mongoose.model("Entry", EntrySchema);
 
-// 🔐 Регистрация пользователя
+// 🔐 Регистрация
 app.post("/api/register", async (req, res) => {
   const { email, password } = req.body;
   const passwordHash = await bcrypt.hash(password, 10);
@@ -43,12 +45,12 @@ app.post("/api/register", async (req, res) => {
     const user = new User({ email, passwordHash });
     await user.save();
     res.status(201).json({ message: "Пользователь зарегистрирован" });
-  } catch (err) {
+  } catch {
     res.status(400).json({ error: "Email уже существует" });
   }
 });
 
-// 🔓 Вход в систему
+// 🔓 Вход
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
@@ -66,7 +68,7 @@ app.post("/api/login", async (req, res) => {
   res.json({ token });
 });
 
-// ✅ Middleware: проверка JWT
+// ✅ Middleware
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: "Нет токена" });
@@ -76,7 +78,7 @@ const authMiddleware = (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.userId = decoded.userId;
     next();
-  } catch (err) {
+  } catch {
     res.status(401).json({ error: "Недействительный токен" });
   }
 };
@@ -124,6 +126,5 @@ app.delete("/api/entries/:id", authMiddleware, async (req, res) => {
 // 🚀 Запуск сервера
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
-
