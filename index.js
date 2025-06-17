@@ -3,53 +3,53 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const User = require("./models/User");
-const securityRoutes = require("./routes/security");
-
+const User = require("./models/User"); // не забудь файл!
 const app = express();
 
-// ✅ CORS — важен порядок! Ставим в начало
+// ✅ CORS
 app.use(cors({
   origin: "https://private-journal-frontend-98czwq4f3.vercel.app",
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
+app.options("*", cors()); // 🔥 важно для preflight
 
-app.use(express.json()); // ✅ ЭТО вместо body-parser
-app.use("/api", securityRoutes);
+// ✅ JSON парсер
+app.use(express.json());
 
-const JWT_SECRET = "super-secret-string";
-
-// ✅ Подключение к MongoDB Atlas
+// ✅ MongoDB
 mongoose.connect("mongodb+srv://gretarichterium:069649669w@gretarichter.ywr2un2.mongodb.net/private_journal?retryWrites=true&w=majority&appName=gretarichter")
   .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => console.error("❌ MongoDB error:", err));
+  .catch((err) => console.error("❌ Mongo error", err));
 
-// 📄 Схема записей
+// ✅ JWT секрет
+const JWT_SECRET = "super-secret-string";
+
+// ✅ Модель Entry
 const EntrySchema = new mongoose.Schema({
   title: String,
   content: String,
   createdAt: { type: Date, default: Date.now },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 });
-
 const Entry = mongoose.model("Entry", EntrySchema);
 
-// 🔐 Регистрация
+// ✅ Регистрация
 app.post("/api/register", async (req, res) => {
   const { email, password } = req.body;
-  const passwordHash = await bcrypt.hash(password, 10);
+  if (!email || !password) return res.status(400).json({ error: "Поля обязательны" });
 
+  const passwordHash = await bcrypt.hash(password, 10);
   try {
     const user = new User({ email, passwordHash });
     await user.save();
     res.status(201).json({ message: "Пользователь зарегистрирован" });
-  } catch {
+  } catch (err) {
     res.status(400).json({ error: "Email уже существует" });
   }
 });
 
-// 🔓 Вход
+// ✅ Вход
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
@@ -69,10 +69,9 @@ app.post("/api/login", async (req, res) => {
 
 // ✅ Middleware
 const authMiddleware = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: "Нет токена" });
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Нет токена" });
 
-  const token = authHeader.split(" ")[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.userId = decoded.userId;
@@ -82,20 +81,18 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// 📥 Получить все записи
+// ✅ CRUD записи
 app.get("/api/entries", authMiddleware, async (req, res) => {
   const entries = await Entry.find({ userId: req.userId }).sort({ createdAt: -1 });
   res.json(entries);
 });
 
-// 📄 Получить одну запись
 app.get("/api/entries/:id", authMiddleware, async (req, res) => {
   const entry = await Entry.findOne({ _id: req.params.id, userId: req.userId });
-  if (!entry) return res.status(404).json({ error: "Запись не найдена" });
+  if (!entry) return res.status(404).json({ error: "Не найдено" });
   res.json(entry);
 });
 
-// ➕ Создать запись
 app.post("/api/entries", authMiddleware, async (req, res) => {
   const { title, content } = req.body;
   const entry = new Entry({ title, content, userId: req.userId });
@@ -103,27 +100,22 @@ app.post("/api/entries", authMiddleware, async (req, res) => {
   res.status(201).json(entry);
 });
 
-// ✏️ Обновить запись
 app.put("/api/entries/:id", authMiddleware, async (req, res) => {
   const { title, content } = req.body;
   const entry = await Entry.findOne({ _id: req.params.id, userId: req.userId });
-  if (!entry) return res.status(404).json({ error: "Запись не найдена" });
+  if (!entry) return res.status(404).json({ error: "Не найдено" });
 
   entry.title = title;
   entry.content = content;
   await entry.save();
-  res.json({ message: "Запись обновлена" });
+  res.json({ message: "Обновлено" });
 });
 
-// ❌ Удалить запись
 app.delete("/api/entries/:id", authMiddleware, async (req, res) => {
   const entry = await Entry.findOneAndDelete({ _id: req.params.id, userId: req.userId });
-  if (!entry) return res.status(404).json({ error: "Запись не найдена" });
-  res.json({ message: "Запись удалена" });
+  if (!entry) return res.status(404).json({ error: "Не найдено" });
+  res.json({ message: "Удалено" });
 });
 
-// 🚀 Запуск сервера
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Backend on port ${PORT}`));
