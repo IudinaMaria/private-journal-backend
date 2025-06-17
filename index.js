@@ -24,7 +24,7 @@ app.use(express.json());
 app.use("/api", securityRoutes); // 👈 ОБЯЗАТЕЛЬНО
 
 // ✅ MongoDB
-mongoose.connect("mongodb+srv://gretarichterium:069649669w@gretarichter.ywr2un2.mongodb.net/private_journal?retryWrites=true&w=majority&appName=gretarichter")
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ Mongo error", err));
 
