@@ -4,18 +4,24 @@ const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const User = require("./models/User"); // не забудь файл!
+
+const securityRoutes = require("./routes/security"); // ✅ Подключаем security.js
+
 const app = express();
 
-// ✅ CORS
+/// ✅ CORS
 app.use(cors({
   origin: "https://private-journal-frontend-98czwq4f3.vercel.app",
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
-app.options("*", cors()); // 🔥 важно для preflight
+app.options("*", cors());
 
 // ✅ JSON парсер
 app.use(express.json());
+
+// ✅ Подключаем security роуты
+app.use("/api", securityRoutes); // 👈 ОБЯЗАТЕЛЬНО
 
 // ✅ MongoDB
 mongoose.connect("mongodb+srv://gretarichterium:069649669w@gretarichter.ywr2un2.mongodb.net/private_journal?retryWrites=true&w=majority&appName=gretarichter")
