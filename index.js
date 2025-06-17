@@ -8,17 +8,22 @@ const User = require("./models/User");
 const securityRoutes = require("./routes/security");
 
 const app = express();
-app.use(cors());
+
+// ✅ Настройка CORS (разрешаем запросы с Vercel-фронта)
+app.use(cors({
+  origin: "https://private-journal-frontend-98czwq4f3.vercel.app",
+  credentials: true,
+}));
+
 app.use(bodyParser.json());
 app.use("/api", securityRoutes);
 
 const JWT_SECRET = "super-secret-string";
 
-// Подключение к MongoDB
+// ✅ Подключение к MongoDB Atlas
 mongoose.connect("mongodb+srv://gretarichterium:069649669w@gretarichter.ywr2un2.mongodb.net/private_journal?retryWrites=true&w=majority&appName=gretarichter");
 
-
-// Схема записей
+// 📄 Схема записей
 const EntrySchema = new mongoose.Schema({
   title: String,
   content: String,
@@ -28,10 +33,9 @@ const EntrySchema = new mongoose.Schema({
 
 const Entry = mongoose.model("Entry", EntrySchema);
 
-// Регистрация пользователя
+// 🔐 Регистрация пользователя
 app.post("/api/register", async (req, res) => {
   const { email, password } = req.body;
-
   const passwordHash = await bcrypt.hash(password, 10);
 
   try {
@@ -43,10 +47,9 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-// Вход в систему
+// 🔓 Вход в систему
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
-
   const user = await User.findOne({ email });
   if (!user) return res.status(401).json({ error: "Неверные данные" });
 
@@ -55,7 +58,6 @@ app.post("/api/login", async (req, res) => {
 
   const ip = req.ip || req.headers["x-forwarded-for"];
   const userAgent = req.headers["user-agent"];
-
   user.loginHistory.push({ ip, userAgent });
   await user.save();
 
@@ -63,13 +65,12 @@ app.post("/api/login", async (req, res) => {
   res.json({ token });
 });
 
-// Middleware: проверка JWT токена
+// ✅ Middleware: проверка JWT
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: "Нет токена" });
 
   const token = authHeader.split(" ")[1];
-
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.userId = decoded.userId;
@@ -79,14 +80,20 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+// 📥 Получить все записи
+app.get("/api/entries", authMiddleware, async (req, res) => {
+  const entries = await Entry.find({ userId: req.userId }).sort({ createdAt: -1 });
+  res.json(entries);
+});
+
+// 📄 Получить одну запись
 app.get("/api/entries/:id", authMiddleware, async (req, res) => {
   const entry = await Entry.findOne({ _id: req.params.id, userId: req.userId });
   if (!entry) return res.status(404).json({ error: "Запись не найдена" });
   res.json(entry);
 });
 
-
-// Сохранить запись (только авторизованному)
+// ➕ Создать запись
 app.post("/api/entries", authMiddleware, async (req, res) => {
   const { title, content } = req.body;
   const entry = new Entry({ title, content, userId: req.userId });
@@ -94,36 +101,26 @@ app.post("/api/entries", authMiddleware, async (req, res) => {
   res.status(201).json(entry);
 });
 
+// ✏️ Обновить запись
 app.put("/api/entries/:id", authMiddleware, async (req, res) => {
   const { title, content } = req.body;
   const entry = await Entry.findOne({ _id: req.params.id, userId: req.userId });
-
   if (!entry) return res.status(404).json({ error: "Запись не найдена" });
 
   entry.title = title;
   entry.content = content;
   await entry.save();
-
   res.json({ message: "Запись обновлена" });
 });
 
-
+// ❌ Удалить запись
 app.delete("/api/entries/:id", authMiddleware, async (req, res) => {
   const entry = await Entry.findOneAndDelete({ _id: req.params.id, userId: req.userId });
   if (!entry) return res.status(404).json({ error: "Запись не найдена" });
   res.json({ message: "Запись удалена" });
 });
 
-
-// Получить записи пользователя
-app.get("/api/entries", authMiddleware, async (req, res) => {
-  const entries = await Entry.find({ userId: req.userId }).sort({
-    createdAt: -1,
-  });
-  res.json(entries);
-});
-
-// Запуск сервера
+// 🚀 Запуск сервера
 app.listen(3001, () => {
   console.log("Server running on http://localhost:3001");
 });
