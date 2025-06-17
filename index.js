@@ -3,25 +3,32 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const User = require("./models/User"); // не забудь файл!
-
-const securityRoutes = require("./routes/security"); // ✅ Подключаем security.js
+const User = require("./models/User");
+const securityRoutes = require("./routes/security");
 
 const app = express();
 
-/// ✅ CORS
+// ✅ CORS: поддержка двух фронтендов
+const allowedOrigins = [
+  "https://private-journal-frontend-98czwq4f3.vercel.app",
+  "https://private-journal-frontend-i243cl0pk.vercel.app"
+];
+
 app.use(cors({
-  origin: "https://private-journal-frontend-98czwq4f3.vercel.app",
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 app.options("*", cors());
 
-// ✅ JSON парсер
 app.use(express.json());
-
-// ✅ Подключаем security роуты
-app.use("/api", securityRoutes); // 👈 ОБЯЗАТЕЛЬНО
+app.use("/api", securityRoutes);
 
 // ✅ MongoDB
 mongoose.connect(process.env.MONGO_URI)
@@ -125,5 +132,3 @@ app.delete("/api/entries/:id", authMiddleware, async (req, res) => {
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => console.log(`🚀 Listening on port ${PORT}`));
-
-
