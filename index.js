@@ -1,7 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const bodyParser = require("body-parser");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const User = require("./models/User");
@@ -16,7 +15,7 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-app.use(bodyParser.json());
+app.use(express.json()); // ✅ ЭТО вместо body-parser
 app.use("/api", securityRoutes);
 
 const JWT_SECRET = "super-secret-string";
