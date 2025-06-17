@@ -12,6 +12,7 @@ const app = express();
 // ✅ Настройка CORS (разрешаем запросы с Vercel-фронта)
 app.use(cors({
   origin: "https://private-journal-frontend-98czwq4f3.vercel.app",
+  methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
 }));
 
@@ -121,6 +122,8 @@ app.delete("/api/entries/:id", authMiddleware, async (req, res) => {
 });
 
 // 🚀 Запуск сервера
-app.listen(3001, () => {
-  console.log("Server running on http://localhost:3001");
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
+
