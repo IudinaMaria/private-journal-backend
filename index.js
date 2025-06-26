@@ -9,10 +9,9 @@ const securityRoutes = require("./routes/security");
 
 const app = express();
 
-// ✅ CORS: поддержка двух фронтендов
+// ✅ CORS: только AWS CloudFront
 const allowedOrigins = [
-  "https://private-journal-frontend-98czwq4f3.vercel.app",
-  "https://private-journal-frontend-i243cl0pk.vercel.app"
+  "https://d31o5yqusqcux8.cloudfront.net"
 ];
 
 app.use(cors({
@@ -37,7 +36,7 @@ mongoose.connect(process.env.MONGODB_URI)
   .catch((err) => console.error("❌ Mongo error", err));
 
 // ✅ JWT секрет
-const JWT_SECRET = "super-secret-string";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // ✅ Модель Entry
 const EntrySchema = new mongoose.Schema({
@@ -131,5 +130,6 @@ app.delete("/api/entries/:id", authMiddleware, async (req, res) => {
   res.json({ message: "Удалено" });
 });
 
+// ✅ Порт
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Listening on port ${PORT}`));
