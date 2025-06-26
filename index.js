@@ -9,12 +9,12 @@ const securityRoutes = require("./routes/security");
 
 const app = express();
 
-// ✅ CORS: только AWS CloudFront
+// ✅ CORS — пропускает только твой CloudFront origin
 const allowedOrigins = [
   "https://d31o5yqusqcux8.cloudfront.net"
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -22,11 +22,16 @@ app.use(cors({
       callback(new Error("Not allowed by CORS"));
     }
   },
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-}));
-app.options("*", cors());
+  credentials: true,
+};
 
+// ✅ ОБЯЗАТЕЛЬНО: сначала preflight
+app.options("*", cors(corsOptions));
+
+// ✅ Затем применяем CORS ко всем
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use("/api", securityRoutes);
 
@@ -35,7 +40,7 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ Mongo error", err));
 
-// ✅ JWT секрет
+// ✅ JWT
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // ✅ Модель Entry
@@ -94,7 +99,7 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
-// ✅ CRUD записи
+// ✅ CRUD
 app.get("/api/entries", authMiddleware, async (req, res) => {
   const entries = await Entry.find({ userId: req.userId }).sort({ createdAt: -1 });
   res.json(entries);
@@ -130,11 +135,10 @@ app.delete("/api/entries/:id", authMiddleware, async (req, res) => {
   res.json({ message: "Удалено" });
 });
 
-// ✅ Порт
-const PORT = process.env.PORT || 3000;
-
-app.get('/', (req, res) => {
-  res.send('Backend is running!');
+// ✅ Проверка
+app.get("/", (req, res) => {
+  res.send("Backend is running!");
 });
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Listening on port ${PORT}`));
