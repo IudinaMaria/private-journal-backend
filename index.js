@@ -11,7 +11,7 @@ const app = express();
 
 // ✅ CORS — пропускает только твой CloudFront origin
 const allowedOrigins = [
-  "https://d31o5yqusqcux8.cloudfront.net"
+  process.env.FRONTEND_ORIGIN
 ];
 
 const corsOptions = {
