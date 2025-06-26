@@ -32,7 +32,7 @@ app.use(express.json());
 app.use("/api", securityRoutes);
 
 // ✅ MongoDB
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ Mongo error", err));
 
