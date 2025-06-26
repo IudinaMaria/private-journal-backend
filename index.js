@@ -132,4 +132,9 @@ app.delete("/api/entries/:id", authMiddleware, async (req, res) => {
 
 // ✅ Порт
 const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+  res.send('Backend is running!');
+});
+
 app.listen(PORT, () => console.log(`🚀 Listening on port ${PORT}`));
