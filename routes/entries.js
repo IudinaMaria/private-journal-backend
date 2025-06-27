@@ -1,34 +1,32 @@
 const express = require("express");
 const router = express.Router();
 const Entry = require("../models/entrySchema");
-const authenticate = require("../middleware/authenticate"); // ✅ твой middleware
-const { encryptText, decryptText } = require("../services/kmsService"); // если ты используешь KMS
+const authenticate = require("../middleware/authenticate");
+const { encryptText } = require("../services/kmsService");
 
-// 📥 POST /api/entries — создать запись
 router.post("/", authenticate, async (req, res) => {
+  const { content, title } = req.body;
+  if (!content || !title) return res.status(400).json({ error: "Пустое содержимое или заголовок" });
+
   try {
-    const { title, content } = req.body;
-    const userId = req.user.sub; // ✅ взяли userId из токена Cognito
+    console.log("📩 [POST /entries] Body:", req.body);
+    console.log("👤 [POST /entries] User from token:", req.user);
 
-    if (!title || !content) {
-      return res.status(400).json({ message: "Missing fields" });
-    }
-
-    // если ты шифруешь на сервере — зашифруй
     const encryptedContent = await encryptText(content);
 
-    const newEntry = new Entry({
-      userId,
+    const entry = new Entry({
+      userId: req.user.sub,
       title,
       content: encryptedContent,
+      createdAt: new Date(),
     });
 
-    await newEntry.save();
-
+    await entry.save();
     res.status(201).json({ message: "Запись сохранена" });
+
   } catch (err) {
-    console.error("❌ Error saving entry:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("❌ Ошибка при создании записи:", err.stack || err);
+    res.status(500).json({ error: "Ошибка при создании записи" });
   }
 });
 
