@@ -3,10 +3,10 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
 const jwksClient = require("jwks-rsa");
-const User = require("./models/UserSchema");
-const Entry = require("./models/Entry");
+const { KMSClient, EncryptCommand, DecryptCommand } = require('@aws-sdk/client-kms');
+const UserSchema = require("./models/UserSchema");
+const Entry = require("./models/entrySchema");
 const securityRoutes = require("./routes/security");
 
 const app = express();
@@ -26,12 +26,10 @@ const corsOptions = {
       callback(new Error("Not allowed by CORS"));
     }
   },
-  
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 };
-
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -77,6 +75,39 @@ const authMiddleware = (req, res, next) => {
   });
 };
 
+// Инициализация клиента KMS
+const kmsClient = new KMSClient({ region: "us-east-1" });
+
+// Функция для шифрования данных
+const encryptData = async (plaintext) => {
+  const params = {
+    KeyId: "arn:aws:kms:us-east-1:123456789012:key/abcd1234-56ef-78gh-90ij-1234567890kl", // Замените на ваш ARN ключа
+    Plaintext: new TextEncoder().encode(plaintext),
+  };
+
+  try {
+    const data = await kmsClient.send(new EncryptCommand(params));
+    return data.CiphertextBlob;  // Это зашифрованные данные, которые можно сохранять в базу данных
+  } catch (err) {
+    console.error("Ошибка шифрования:", err);
+  }
+};
+
+// Функция для расшифровки данных
+const decryptData = async (cipherText) => {
+  const params = {
+    CiphertextBlob: cipherText,
+  };
+
+  try {
+    const data = await kmsClient.send(new DecryptCommand(params));
+    const plaintext = new TextDecoder().decode(data.Plaintext);
+    return plaintext;
+  } catch (err) {
+    console.error("Ошибка расшифровки:", err);
+  }
+};
+
 // Роуты для работы с записями
 app.get("/api/entries", authMiddleware, async (req, res) => {
   const entries = await Entry.find({ userId: req.userId }).sort({ createdAt: -1 });
@@ -84,16 +115,36 @@ app.get("/api/entries", authMiddleware, async (req, res) => {
 });
 
 app.get("/api/entries/:id", authMiddleware, async (req, res) => {
-  const entry = await Entry.findOne({ _id: req.params.id, userId: req.userId });
-  if (!entry) return res.status(404).json({ error: "Не найдено" });
-  res.json(entry);
+  try {
+    const entry = await Entry.findOne({ _id: req.params.id, userId: req.userId });
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Запись не найдена' });
+    }
+
+    // Расшифровываем содержимое перед отправкой клиенту
+    const decryptedContent = await decryptData(entry.content);
+
+    res.json({ ...entry.toObject(), content: decryptedContent });
+  } catch (err) {
+    res.status(500).json({ error: 'Ошибка при загрузке записи' });
+  }
 });
 
 app.post("/api/entries", authMiddleware, async (req, res) => {
   const { title, content } = req.body;
-  const entry = new Entry({ title, content, userId: req.userId });
-  await entry.save();
-  res.status(201).json(entry);
+
+  try {
+    // Шифруем содержимое перед сохранением
+    const encryptedContent = await encryptData(content);
+
+    // Сохраняем запись с зашифрованным содержимым в базу данных
+    const entry = new Entry({ title, content: encryptedContent, userId: req.userId });
+    await entry.save();
+    res.status(201).json(entry);
+  } catch (err) {
+    res.status(500).json({ error: 'Ошибка при создании записи' });
+  }
 });
 
 app.put("/api/entries/:id", authMiddleware, async (req, res) => {
@@ -101,10 +152,17 @@ app.put("/api/entries/:id", authMiddleware, async (req, res) => {
   const entry = await Entry.findOne({ _id: req.params.id, userId: req.userId });
   if (!entry) return res.status(404).json({ error: "Не найдено" });
 
-  entry.title = title;
-  entry.content = content;
-  await entry.save();
-  res.json({ message: "Обновлено" });
+  try {
+    // Шифруем новое содержимое перед обновлением
+    const encryptedContent = await encryptData(content);
+
+    entry.title = title;
+    entry.content = encryptedContent;
+    await entry.save();
+    res.json({ message: "Обновлено" });
+  } catch (err) {
+    res.status(500).json({ error: 'Ошибка при обновлении записи' });
+  }
 });
 
 app.delete("/api/entries/:id", authMiddleware, async (req, res) => {

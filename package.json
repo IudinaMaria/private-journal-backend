@@ -9,6 +9,7 @@
     "node": "18.x"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "^3.838.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
