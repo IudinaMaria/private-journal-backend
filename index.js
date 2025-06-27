@@ -4,11 +4,13 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const jwksClient = require("jwks-rsa");
-const { KMSClient, EncryptCommand, DecryptCommand } = require('@aws-sdk/client-kms');
 const UserSchema = require("./models/UserSchema");
-const Entry = require("./models/entrySchema"); // <-- Импорт модели
+const Entry = require("./models/entrySchema");
 
-// 1. Импортируй middleware для логирования
+// ✅ Удалён ненужный импорт KMS SDK
+// const { KMSClient, EncryptCommand, DecryptCommand } = require('@aws-sdk/client-kms');
+
+// 1. Импорт middleware для логирования
 const { requestLogger, errorLogger } = require('./middleware/loggerMiddleware');
 
 const app = express();
@@ -41,6 +43,7 @@ app.use(requestLogger);
 
 // 4. Основные роуты
 app.use('/api/security', require('./routes/security'));
+app.use('/api/entries', require('./routes/entries')); // 👈 Добавь, если у тебя есть такой роут
 
 // 5. Логирование ошибок (после роутов!)
 app.use(errorLogger);
@@ -50,9 +53,7 @@ mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTop
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ Mongo error", err));
 
-// ...Остальной твой код (authMiddleware, KMS, encrypt/decrypt, роуты для /api/entries и т.д.)
-
-// Запуск сервера
+// Тестовый маршрут
 app.get("/", (req, res) => res.send("Backend is running!"));
 
 const PORT = process.env.PORT || 3000;
