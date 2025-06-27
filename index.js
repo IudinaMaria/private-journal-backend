@@ -5,9 +5,8 @@ const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const jwksClient = require("jwks-rsa");
 const { KMSClient, EncryptCommand, DecryptCommand } = require('@aws-sdk/client-kms');
-const UserSchema = require("./models/UserSchema");
-const Entry = require("./models/entrySchema");
-const securityRoutes = require("./routes/security");
+const UserSchema = require("./models/UserSchema");  // Если нужно использовать модель пользователя
+const Entry = require("./models/Entry"); // Модель записи для хранения в MongoDB
 
 const app = express();
 
@@ -33,9 +32,9 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
-app.use("/api", securityRoutes);
 
-mongoose.connect(process.env.MONGODB_URI)
+// Настройка подключения к MongoDB Atlas
+mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ Mongo error", err));
 
@@ -70,7 +69,7 @@ const authMiddleware = (req, res, next) => {
     if (err) {
       return res.status(401).json({ error: "Недействительный токен" });
     }
-    req.userId = decoded.userId; // Добавляем ID пользователя из токена в запрос
+    req.userId = decoded.userId;  // Добавляем ID пользователя из токена в запрос
     next();
   });
 };
@@ -81,13 +80,13 @@ const kmsClient = new KMSClient({ region: "us-east-1" });
 // Функция для шифрования данных
 const encryptData = async (plaintext) => {
   const params = {
-    KeyId: "arn:aws:kms:eu-north-1:102051096426:key/0d35e7fa-3f26-4ca1-a312-69c8488b9b68",
+    KeyId: "arn:aws:kms:eu-north-1:020510964266:key/0d35e7fa-3f26-4ca1-a312-69c8488b9b68",  // ARN вашего ключа
     Plaintext: new TextEncoder().encode(plaintext),
   };
 
   try {
     const data = await kmsClient.send(new EncryptCommand(params));
-    return data.CiphertextBlob;  // Это зашифрованные данные, которые можно сохранять в базу данных
+    return data.CiphertextBlob;  // Возвращаем зашифрованные данные
   } catch (err) {
     console.error("Ошибка шифрования:", err);
   }
@@ -109,11 +108,14 @@ const decryptData = async (cipherText) => {
 };
 
 // Роуты для работы с записями
+
+// Получить все записи
 app.get("/api/entries", authMiddleware, async (req, res) => {
   const entries = await Entry.find({ userId: req.userId }).sort({ createdAt: -1 });
   res.json(entries);
 });
 
+// Получить конкретную запись
 app.get("/api/entries/:id", authMiddleware, async (req, res) => {
   try {
     const entry = await Entry.findOne({ _id: req.params.id, userId: req.userId });
@@ -131,6 +133,7 @@ app.get("/api/entries/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// Создать запись
 app.post("/api/entries", authMiddleware, async (req, res) => {
   const { title, content } = req.body;
 
@@ -147,6 +150,7 @@ app.post("/api/entries", authMiddleware, async (req, res) => {
   }
 });
 
+// Обновить запись
 app.put("/api/entries/:id", authMiddleware, async (req, res) => {
   const { title, content } = req.body;
   const entry = await Entry.findOne({ _id: req.params.id, userId: req.userId });
@@ -165,13 +169,16 @@ app.put("/api/entries/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// Удалить запись
 app.delete("/api/entries/:id", authMiddleware, async (req, res) => {
   const entry = await Entry.findOneAndDelete({ _id: req.params.id, userId: req.userId });
   if (!entry) return res.status(404).json({ error: "Не найдено" });
   res.json({ message: "Удалено" });
 });
 
+// Запуск сервера
 app.get("/", (req, res) => res.send("Backend is running!"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Listening on port ${PORT}`));
+
