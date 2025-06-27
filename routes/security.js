@@ -1,9 +1,24 @@
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
+const jwksClient = require("jwks-rsa");
 const User = require("../models/User");
 
-const JWT_SECRET = process.env.JWT_SECRET;
+// Настройка клиента для получения JWKS от Cognito
+const client = jwksClient({
+  jwksUri: "https://cognito-idp.eu-north-1.amazonaws.com/eu-north-1_vcXKxrYk5/.well-known/jwks.json", // Укажите свой jwksUri
+});
+
+// Функция для получения публичного ключа из JWKS
+const getKey = (header, callback) => {
+  client.getSigningKey(header.kid, (err, key) => {
+    if (err) {
+      return callback(err);
+    }
+    const signingKey = key.publicKey || key.rsaPublicKey;
+    callback(null, signingKey);
+  });
+};
 
 // Получение истории входов авторизованного пользователя
 router.get("/security/logins", async (req, res) => {
@@ -15,15 +30,22 @@ router.get("/security/logins", async (req, res) => {
   const token = authHeader.split(" ")[1];
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.userId);
-    if (!user) {
-      return res.status(404).json({ error: "Пользователь не найден" });
-    }
+    // Проверяем токен с использованием публичного ключа из Cognito
+    jwt.verify(token, getKey, { algorithms: ['RS256'] }, async (err, decoded) => {
+      if (err) {
+        return res.status(401).json({ error: "Недействительный токен" });
+      }
+      
+      // Получаем пользователя по ID из токена
+      const user = await User.findById(decoded.userId);
+      if (!user) {
+        return res.status(404).json({ error: "Пользователь не найден" });
+      }
 
-    res.json(user.loginHistory || []);
+      res.json(user.loginHistory || []);
+    });
   } catch (err) {
-    res.status(401).json({ error: "Недействительный токен" });
+    res.status(401).json({ error: "Ошибка при обработке токена" });
   }
 });
 

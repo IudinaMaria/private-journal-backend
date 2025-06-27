@@ -4,16 +4,16 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const jwksClient = require("jwks-rsa");
 const User = require("./models/User");
 const securityRoutes = require("./routes/security");
 
 const app = express();
 
+// Разрешённые источники (Origins)
 const allowedOrigins = [
   'https://d1bdaso729tx0i.cloudfront.net',
-   'http://localhost:3000',
-   'http://d1bdaso729tx0i.cloudfront.net', // иногда CloudFront работает по HTTP
-   'null', // на случай прямых запросов из некоторых окружений
+  'http://localhost:3000',
 ];
 
 const corsOptions = {
@@ -38,57 +38,21 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ Mongo error", err));
 
-const JWT_SECRET = process.env.JWT_SECRET;
-
-const EntrySchema = new mongoose.Schema({
-  title: String,
-  content: String,
-  createdAt: { type: Date, default: Date.now },
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+// Настройка клиента для получения JWKS от Cognito
+const client = jwksClient({
+  jwksUri: "https://cognito-idp.eu-north-1.amazonaws.com/eu-north-1_vcXKxrYk5/.well-known/jwks.json",
 });
 
-const Entry = mongoose.model("Entry", EntrySchema);
-
-// Регистрация с проверкой существующего пользователя
-app.post("/api/register", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password)
-    return res.status(400).json({ error: "Поля обязательны" });
-
-  try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(409).json({ error: "Email уже существует" });
+// Функция для извлечения ключа
+const getKey = (header, callback) => {
+  client.getSigningKey(header.kid, (err, key) => {
+    if (err) {
+      return callback(err);
     }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const user = new User({ email, passwordHash });
-    await user.save();
-
-    res.status(201).json({ message: "Пользователь зарегистрирован" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Ошибка регистрации пользователя" });
-  }
-});
-
-// Логин
-app.post("/api/login", async (req, res) => {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email });
-  if (!user) return res.status(401).json({ error: "Неверные данные" });
-
-  const isMatch = await bcrypt.compare(password, user.passwordHash);
-  if (!isMatch) return res.status(401).json({ error: "Неверные данные" });
-
-  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-  const userAgent = req.headers["user-agent"];
-  user.loginHistory.push({ ip, userAgent });
-  await user.save();
-
-  const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: "2h" });
-  res.json({ token });
-});
+    const signingKey = key.publicKey || key.rsaPublicKey;
+    callback(null, signingKey);
+  });
+};
 
 // Middleware для защищённых маршрутов
 const authMiddleware = (req, res, next) => {
@@ -100,15 +64,17 @@ const authMiddleware = (req, res, next) => {
 
   const token = authHeader.split(" ")[1];
 
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+  // Проверяем токен с использованием публичного ключа из Cognito
+  jwt.verify(token, getKey, { algorithms: ['RS256'] }, (err, decoded) => {
     if (err) {
       return res.status(401).json({ error: "Недействительный токен" });
     }
-    req.userId = decoded.userId;
+    req.userId = decoded.userId; // Добавляем ID пользователя из токена в запрос
     next();
   });
 };
 
+// Роуты для работы с записями
 app.get("/api/entries", authMiddleware, async (req, res) => {
   const entries = await Entry.find({ userId: req.userId }).sort({ createdAt: -1 });
   res.json(entries);
