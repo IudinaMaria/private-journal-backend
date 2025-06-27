@@ -11,7 +11,9 @@ const app = express();
 
 const allowedOrigins = [
   'https://d1bdaso729tx0i.cloudfront.net',
-  'http://localhost:3000',
+   'http://localhost:3000',
+   'http://d1bdaso729tx0i.cloudfront.net', // иногда CloudFront работает по HTTP
+   'null', // на случай прямых запросов из некоторых окружений
 ];
 
 const corsOptions = {
