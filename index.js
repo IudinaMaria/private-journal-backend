@@ -11,7 +11,8 @@ const app = express();
 
 // ✅ CORS — пропускает только твой CloudFront origin
 const allowedOrigins = [
-  process.env.FRONTEND_ORIGIN
+   'https://d1bdaso729tx0i.cloudfront.net',  // твой текущий домен CloudFront
+    'http://localhost:3000',                  // для разработки
 ];
 
 const corsOptions = {
