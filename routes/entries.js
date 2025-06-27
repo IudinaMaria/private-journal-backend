@@ -9,8 +9,8 @@ router.post("/", authenticate, async (req, res) => {
   if (!content || !title) return res.status(400).json({ error: "Пустое содержимое или заголовок" });
 
   try {
-    console.log("📩 [POST /entries] Body:", req.body);
-    console.log("👤 [POST /entries] User from token:", req.user);
+    console.log(" [POST /entries] Body:", req.body);
+    console.log(" [POST /entries] User from token:", req.user);
 
     const encryptedContent = await encryptText(content);
 
