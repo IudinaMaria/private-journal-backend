@@ -17,9 +17,10 @@ const app = express();
 
 // 2. Настройка CORS и body-parser
 const allowedOrigins = [
-  'https://d1bdaso729tx0i.cloudfront.net',
   'http://localhost:3000',
+  'https://d1bdaso729tx0i.cloudfront.net',
   'http://d1bdaso729tx0i.cloudfront.net',
+  'https://www.d1bdaso729tx0i.cloudfront.net',
 ];
 
 const corsOptions = {
