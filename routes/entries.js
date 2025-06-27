@@ -5,7 +5,7 @@ const jwksClient = require("jwks-rsa");
 const Entry = require("../models/entrySchema");
 const { encryptText, decryptText } = require("../services/kmsService");
 
-// Cognito
+// Cognito JWKS
 const client = jwksClient({
   jwksUri: "https://cognito-idp.eu-north-1.amazonaws.com/eu-north-1_vcXKxrYk5/.well-known/jwks.json",
 });
@@ -17,6 +17,7 @@ const getKey = (header, callback) => {
   });
 };
 
+// Middleware: JWT авторизация
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: "Нет токена" });
@@ -29,27 +30,31 @@ function authenticate(req, res, next) {
   });
 }
 
-// 📥 Создать запись
+// 📥 POST /api/entries — создать запись
 router.post("/", authenticate, async (req, res) => {
-  const { content } = req.body;
-  if (!content) return res.status(400).json({ error: "Пустое содержимое" });
+  const { content, title } = req.body;
+  if (!content || !title) return res.status(400).json({ error: "Пустое содержимое или заголовок" });
 
   try {
+    // Двойное шифрование: клиент → trustCode (AES), сервер → KMS
     const encryptedContent = await encryptText(content);
+
     const entry = new Entry({
       userId: req.user.sub,
+      title,
       content: encryptedContent,
       createdAt: new Date(),
     });
+
     await entry.save();
     res.status(201).json({ message: "Запись сохранена" });
   } catch (err) {
-    console.error(err);
+    console.error("Ошибка при создании записи:", err);
     res.status(500).json({ error: "Ошибка при создании записи" });
   }
 });
 
-// 📤 Получить записи (с фильтрацией по дате)
+// 📤 GET /api/entries — получить записи
 router.get("/", authenticate, async (req, res) => {
   try {
     const { from, to } = req.query;
@@ -66,38 +71,40 @@ router.get("/", authenticate, async (req, res) => {
     const decryptedEntries = await Promise.all(
       entries.map(async (entry) => ({
         _id: entry._id,
-        content: await decryptText(entry.content),
+        title: entry.title,
+        content: await decryptText(entry.content), // KMS → AES
         createdAt: entry.createdAt,
       }))
     );
 
     res.json(decryptedEntries);
   } catch (err) {
-    console.error(err);
+    console.error("Ошибка при получении записей:", err);
     res.status(500).json({ error: "Ошибка при получении записей" });
   }
 });
 
-// ✏️ Обновить запись
+// ✏️ PUT /api/entries/:id — обновить запись
 router.put("/:id", authenticate, async (req, res) => {
-  const { content } = req.body;
-  if (!content) return res.status(400).json({ error: "Пустое содержимое" });
+  const { content, title } = req.body;
+  if (!content || !title) return res.status(400).json({ error: "Пустое содержимое или заголовок" });
 
   try {
     const entry = await Entry.findOne({ _id: req.params.id, userId: req.user.sub });
     if (!entry) return res.status(404).json({ error: "Запись не найдена" });
 
     entry.content = await encryptText(content);
+    entry.title = title;
     await entry.save();
 
     res.json({ message: "Запись обновлена" });
   } catch (err) {
-    console.error(err);
+    console.error("Ошибка при обновлении записи:", err);
     res.status(500).json({ error: "Ошибка при обновлении записи" });
   }
 });
 
-// 🗑️ Удалить запись
+// 🗑️ DELETE /api/entries/:id — удалить запись
 router.delete("/:id", authenticate, async (req, res) => {
   try {
     const result = await Entry.findOneAndDelete({ _id: req.params.id, userId: req.user.sub });
@@ -105,7 +112,7 @@ router.delete("/:id", authenticate, async (req, res) => {
 
     res.json({ message: "Запись удалена" });
   } catch (err) {
-    console.error(err);
+    console.error("Ошибка при удалении записи:", err);
     res.status(500).json({ error: "Ошибка при удалении записи" });
   }
 });
