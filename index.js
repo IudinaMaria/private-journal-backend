@@ -9,10 +9,9 @@ const securityRoutes = require("./routes/security");
 
 const app = express();
 
-// ✅ CORS — пропускает только твой CloudFront origin
 const allowedOrigins = [
-   'https://d1bdaso729tx0i.cloudfront.net',  // твой текущий домен CloudFront
-    'http://localhost:3000',                  // для разработки
+  'https://d1bdaso729tx0i.cloudfront.net',
+  'http://localhost:3000',
 ];
 
 const corsOptions = {
@@ -28,47 +27,50 @@ const corsOptions = {
   credentials: true,
 };
 
-// ✅ ОБЯЗАТЕЛЬНО: сначала preflight
 app.options("*", cors(corsOptions));
-
-// ✅ Затем применяем CORS ко всем
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use("/api", securityRoutes);
 
-// ✅ MongoDB
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ Mongo error", err));
 
-// ✅ JWT
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// ✅ Модель Entry
 const EntrySchema = new mongoose.Schema({
   title: String,
   content: String,
   createdAt: { type: Date, default: Date.now },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 });
+
 const Entry = mongoose.model("Entry", EntrySchema);
 
-// ✅ Регистрация
+// Регистрация с проверкой существующего пользователя
 app.post("/api/register", async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: "Поля обязательны" });
+  if (!email || !password)
+    return res.status(400).json({ error: "Поля обязательны" });
 
-  const passwordHash = await bcrypt.hash(password, 10);
   try {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ error: "Email уже существует" });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
     const user = new User({ email, passwordHash });
     await user.save();
+
     res.status(201).json({ message: "Пользователь зарегистрирован" });
   } catch (err) {
-    res.status(400).json({ error: "Email уже существует" });
+    console.error(err);
+    res.status(500).json({ error: "Ошибка регистрации пользователя" });
   }
 });
 
-// ✅ Вход
+// Логин с исправленным IP
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
@@ -77,7 +79,7 @@ app.post("/api/login", async (req, res) => {
   const isMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isMatch) return res.status(401).json({ error: "Неверные данные" });
 
-  const ip = req.ip || req.headers["x-forwarded-for"];
+  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
   const userAgent = req.headers["user-agent"];
   user.loginHistory.push({ ip, userAgent });
   await user.save();
@@ -86,21 +88,27 @@ app.post("/api/login", async (req, res) => {
   res.json({ token });
 });
 
-// ✅ Middleware
+// Middleware с явными ошибками
 const authMiddleware = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Нет токена" });
+  const authHeader = req.headers.authorization;
 
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Нет токена или неверный формат" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).json({ error: "Недействительный токен" });
+    }
     req.userId = decoded.userId;
     next();
-  } catch {
-    res.status(401).json({ error: "Недействительный токен" });
-  }
+  });
 };
 
-// ✅ CRUD
+// CRUD без изменений, всё ок
+
 app.get("/api/entries", authMiddleware, async (req, res) => {
   const entries = await Entry.find({ userId: req.userId }).sort({ createdAt: -1 });
   res.json(entries);
@@ -136,10 +144,7 @@ app.delete("/api/entries/:id", authMiddleware, async (req, res) => {
   res.json({ message: "Удалено" });
 });
 
-// ✅ Проверка
-app.get("/", (req, res) => {
-  res.send("Backend is running!");
-});
+app.get("/", (req, res) => res.send("Backend is running!"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Listening on port ${PORT}`));
