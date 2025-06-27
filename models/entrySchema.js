@@ -7,7 +7,7 @@ const kmsClient = new KMSClient({ region: "us-east-1" });
 // Функция для шифрования данных с использованием KMS
 const encryptData = async (data) => {
   const params = {
-    KeyId: "arn:aws:kms:us-east-1:123456789012:key/abcd1234-56ef-78gh-90ij-1234567890kl", // Замените на реальный ARN ключа
+      KeyId: "arn:aws:kms:eu-north-1:102051096426:key/0d35e7fa-3f26-4ca1-a312-69c8488b9b68",
     Plaintext: Buffer.from(data),
   };
 
