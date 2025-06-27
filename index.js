@@ -70,7 +70,7 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-// Логин с исправленным IP
+// Логин
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
@@ -88,7 +88,7 @@ app.post("/api/login", async (req, res) => {
   res.json({ token });
 });
 
-// Middleware с явными ошибками
+// Middleware для защищённых маршрутов
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
@@ -106,8 +106,6 @@ const authMiddleware = (req, res, next) => {
     next();
   });
 };
-
-// CRUD без изменений, всё ок
 
 app.get("/api/entries", authMiddleware, async (req, res) => {
   const entries = await Entry.find({ userId: req.userId }).sort({ createdAt: -1 });
