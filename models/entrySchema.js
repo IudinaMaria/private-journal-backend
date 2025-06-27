@@ -1,69 +1,51 @@
 const mongoose = require("mongoose");
 const { KMSClient, EncryptCommand, DecryptCommand } = require("@aws-sdk/client-kms");
 
-// Инициализация клиента AWS KMS
-const kmsClient = new KMSClient({ region: "us-east-1" });
+// 1. AWS KMS client и параметры
+const kmsClient = new KMSClient({ region: "eu-north-1" }); // должен совпадать с регионом твоего KMS-ключа!
+const KEY_ID = "arn:aws:kms:eu-north-1:020510964266:key/0d35e7fa-3f26-4ca1-a312-69c8488b9b68";
 
-// Функция для шифрования данных с использованием KMS
-const encryptData = async (data) => {
+// 2. Вспомогательные функции
+async function encryptData(plain) {
   const params = {
-      KeyId: "arn:aws:kms:eu-north-1:020510964266:key/0d35e7fa-3f26-4ca1-a312-69c8488b9b68",
-    Plaintext: Buffer.from(data),
+    KeyId: KEY_ID,
+    Plaintext: Buffer.isBuffer(plain) ? plain : Buffer.from(plain, "utf8"),
   };
+  const { CiphertextBlob } = await kmsClient.send(new EncryptCommand(params));
+  return Buffer.from(CiphertextBlob); // обязательно делай Buffer!
+}
 
-  try {
-    const result = await kmsClient.send(new EncryptCommand(params));
-    return result.CiphertextBlob;
-  } catch (err) {
-    console.error("Ошибка при шифровании:", err);
-  }
-};
+async function decryptData(cipher) {
+  const params = { CiphertextBlob: Buffer.isBuffer(cipher) ? cipher : Buffer.from(cipher) };
+  const { Plaintext } = await kmsClient.send(new DecryptCommand(params));
+  return Plaintext.toString("utf8");
+}
 
-// Функция для расшифровки данных с использованием KMS
-const decryptData = async (cipherText) => {
-  const params = {
-    CiphertextBlob: cipherText,
-  };
-
-  try {
-    const result = await kmsClient.send(new DecryptCommand(params));
-    return result.Plaintext.toString();
-  } catch (err) {
-    console.error("Ошибка при расшифровке:", err);
-  }
-};
-
-// Определение схемы записи
+// 3. Определение схемы
 const entrySchema = new mongoose.Schema(
   {
-    title: String,
-    content: Buffer, // Храним контент как зашифрованные данные (Buffer)
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    title: { type: String, required: true },
+    content: { type: Buffer, required: true }, // encrypted
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },
   { timestamps: true }
 );
 
-// Хук для шифрования контента перед сохранением
+// 4. Хук: шифруем content перед сохранением
 entrySchema.pre("save", async function (next) {
-  if (this.isModified("content")) {
+  if (this.isModified("content") && typeof this.content === "string") {
     try {
-      const encryptedContent = await encryptData(this.content); // Шифруем контент
-      this.content = encryptedContent;
+      this.content = await encryptData(this.content);
     } catch (err) {
-      next(err); // Обработка ошибки шифрования
+      return next(err);
     }
   }
   next();
 });
 
-// Метод для расшифровки контента
+// 5. Метод для расшифровки
 entrySchema.methods.decryptContent = async function () {
-  try {
-    const decryptedContent = await decryptData(this.content); // Расшифровываем контент
-    return decryptedContent;
-  } catch (err) {
-    throw new Error("Ошибка при расшифровке контента");
-  }
+  return await decryptData(this.content);
 };
 
 module.exports = mongoose.model("Entry", entrySchema);
