@@ -6,7 +6,7 @@ const jwt = require("jsonwebtoken");
 const jwksClient = require("jwks-rsa");
 const { KMSClient, EncryptCommand, DecryptCommand } = require('@aws-sdk/client-kms');
 const UserSchema = require("./models/UserSchema");  // Если нужно использовать модель пользователя
-const Entry = require("./models/Entry"); // Модель записи для хранения в MongoDB
+const entrySchema = require("./models/entrySchema"); // Модель записи для хранения в MongoDB
 
 const app = express();
 
