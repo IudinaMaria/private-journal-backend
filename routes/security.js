@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
 const jwksClient = require("jwks-rsa");
-const User = require("../models/User");
+const User = require("../models/UserSchema"); // Модель, если необходимо хранить дополнительные данные
 
 // Настройка клиента для получения JWKS от Cognito
 const client = jwksClient({
@@ -35,13 +35,14 @@ router.get("/security/logins", async (req, res) => {
       if (err) {
         return res.status(401).json({ error: "Недействительный токен" });
       }
-      
-      // Получаем пользователя по ID из токена
-      const user = await User.findById(decoded.userId);
+
+      // Получаем пользователя по уникальному идентификатору Cognito (cognitoId)
+      const user = await User.findOne({ cognitoId: decoded.sub }); // Используем 'sub' из Cognito в качестве идентификатора пользователя
       if (!user) {
         return res.status(404).json({ error: "Пользователь не найден" });
       }
 
+      // Возвращаем историю входов из MongoDB
       res.json(user.loginHistory || []);
     });
   } catch (err) {

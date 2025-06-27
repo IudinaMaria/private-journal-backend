@@ -5,7 +5,8 @@ const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const jwksClient = require("jwks-rsa");
-const User = require("./models/User");
+const User = require("./models/UserSchema");
+const Entry = require("./models/Entry");
 const securityRoutes = require("./routes/security");
 
 const app = express();
@@ -14,6 +15,7 @@ const app = express();
 const allowedOrigins = [
   'https://d1bdaso729tx0i.cloudfront.net',
   'http://localhost:3000',
+  'http://d1bdaso729tx0i.cloudfront.net',
 ];
 
 const corsOptions = {
@@ -24,12 +26,13 @@ const corsOptions = {
       callback(new Error("Not allowed by CORS"));
     }
   },
+  
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 };
 
-app.options("*", cors(corsOptions));
+
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use("/api", securityRoutes);
